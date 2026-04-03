@@ -26,12 +26,18 @@ declare module "http" {
   }
 }
 
-// PostgreSQL connection pool with increased size for 400+ users
+// PostgreSQL connection pool for sessions
 const sessionPool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 50, // Increased from default 10
+  max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+});
+
+// Log session pool errors
+sessionPool.on('error', (err) => {
+  console.error('Session pool error:', err.message);
 });
 
 // PostgreSQL-backed session store (persists across restarts)
@@ -43,6 +49,7 @@ app.use(
       pool: sessionPool,
       tableName: 'user_sessions',
       createTableIfMissing: true,
+      errorLog: (err: Error) => console.error('Session store error:', err.message),
     }),
     secret: process.env.SESSION_SECRET || 'brusher-games-secret-key-change-in-production',
     resave: false,
@@ -53,6 +60,7 @@ app.use(
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
+    proxy: true,
   })
 );
 

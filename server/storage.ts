@@ -17,9 +17,10 @@ const { Pool } = pg;
 // Increased pool size for 400+ concurrent users
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 50, // Increased from default 10
+  max: 50,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
 });
 
 const db = drizzle(pool);
