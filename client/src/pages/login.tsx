@@ -212,6 +212,8 @@ export default function Login() {
       <div className="w-full max-w-md mt-6 sm:mt-8">
         <FeedbackForm />
       </div>
+
+      <p className="mt-6 text-xs text-muted-foreground">Created by Henry Zisow</p>
     </div>
   );
 }

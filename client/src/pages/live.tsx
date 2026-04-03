@@ -170,6 +170,8 @@ export default function Live() {
             </a>
           </Button>
         </motion.div>
+
+        <p className="mt-8 text-xs text-slate-500">Created by Henry Zisow</p>
       </div>
     </div>
   );

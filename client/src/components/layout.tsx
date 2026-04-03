@@ -51,6 +51,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
+      <footer className="border-t border-border/40 py-4 text-center text-xs text-muted-foreground">
+        Created by Henry Zisow
+      </footer>
+
       {/* Floating Admin Button */}
       {location !== '/admin' && (
         <Link href="/admin">
