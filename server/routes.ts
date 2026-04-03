@@ -203,8 +203,8 @@ export async function registerRoutes(
 
       const authUrl = await client.getAuthCodeUrl(authCodeUrlParameters);
       res.redirect(authUrl);
-    } catch (error) {
-      console.error("Microsoft auth error:", error);
+    } catch (error: any) {
+      console.error("Microsoft auth error:", error?.message || error);
       res.redirect("/login?error=auth_failed");
     }
   });
@@ -230,9 +230,12 @@ export async function registerRoutes(
         redirectUri,
       };
 
+      console.log("Microsoft callback - redirectUri used:", redirectUri);
+
       const response = await client.acquireTokenByCode(tokenRequest);
-      
+
       if (!response || !response.account) {
+        console.error("Microsoft callback - no account in response:", JSON.stringify(response, null, 2));
         return res.redirect("/login?error=no_account");
       }
 
@@ -271,8 +274,9 @@ export async function registerRoutes(
         }
         res.redirect("/");
       });
-    } catch (error) {
-      console.error("Microsoft callback error:", error);
+    } catch (error: any) {
+      console.error("Microsoft callback error:", error?.message || error);
+      console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error || {}), 2));
       res.redirect("/login?error=callback_failed");
     }
   });
