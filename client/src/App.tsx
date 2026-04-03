@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Layout from "@/components/layout";
 import Login from "@/pages/login";
+import ResetPassword from "@/pages/reset-password";
 import Live from "@/pages/live";
 import Dashboard from "@/pages/dashboard";
 import AdminDashboard from "@/pages/admin";
@@ -45,6 +46,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/live" component={Live} />
       <Route path="/setup" component={SetupName} />
       <Route path="/">

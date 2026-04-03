@@ -15,6 +15,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSignupMode, setIsSignupMode] = useState(true);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [isResetLoading, setIsResetLoading] = useState(false);
   const { login, signup, isLoading, currentUser } = useGame();
   const [, setLocation] = useLocation();
 
@@ -52,6 +57,29 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) return;
+    setIsResetLoading(true);
+    setResetError("");
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to send reset link");
+      }
+      setResetSent(true);
+    } catch (err: any) {
+      setResetError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setIsResetLoading(false);
+    }
+  };
+
   const handleMicrosoftLogin = () => {
     window.location.href = '/api/auth/microsoft';
   };
@@ -78,7 +106,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-slate-50 px-4 py-6 sm:py-10">
       <div className="w-full max-w-md mb-4 sm:absolute sm:top-6 sm:right-6 sm:w-auto sm:mb-0 z-20">
-         <Button variant="default" size="default" asChild className="w-full sm:w-auto gap-2 bg-primary hover:bg-primary/90 text-white shadow-lg px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold">
+         <Button variant="default" size="default" asChild className="w-full sm:w-auto gap-2 bg-primary hover:bg-primary/90 text-white shadow-lg px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm md:text-base font-semibold">
             <a href="https://docs.google.com/document/d/14u_YquL67kXpkz7yrw1xmVZAgIYJ3H6z9P9mlUXzeHA/edit?tab=t.0#heading=h.jcl1clyjefps" target="_blank" rel="noopener noreferrer">
               <FileText className="h-4 w-4 sm:h-5 sm:w-5" /> View the Rulebook
             </a>
@@ -106,7 +134,7 @@ export default function Login() {
             </CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="pb-6 sm:pb-10 space-y-4 sm:space-y-6 px-4 sm:px-6">
+        <CardContent className="pb-6 sm:pb-10 space-y-4 sm:space-y-6 px-3 sm:px-6">
           {errorMessage && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -114,94 +142,174 @@ export default function Login() {
             </Alert>
           )}
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-            <strong>Recommended:</strong> Use email sign-in for the best experience! It's faster and more reliable.
-          </div>
-
-          <form onSubmit={handleEmailAuth} className="space-y-3">
-            <Input
-              type="email"
-              placeholder="student@gannacademy.org"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="bg-white border-slate-200 h-11 text-sm sm:text-base placeholder:text-muted-foreground/50 focus:border-primary focus:ring-primary/20 transition-all shadow-sm"
-              data-testid="input-email"
-              required
-            />
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password (min. 6 characters)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-white border-slate-200 h-11 pr-10 text-sm sm:text-base placeholder:text-muted-foreground/50 focus:border-primary focus:ring-primary/20 transition-all shadow-sm"
-                data-testid="input-password"
-                required
-                minLength={6}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                data-testid="button-toggle-password"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full h-11 text-base font-semibold bg-primary hover:bg-primary/90"
-              disabled={isLoading}
-              data-testid="button-email-auth"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+          {showForgotPassword ? (
+            <div className="space-y-4">
+              {resetSent ? (
+                <div className="text-center space-y-3">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
+                    Check your email for a reset link
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setResetSent(false);
+                      setResetEmail("");
+                      setResetError("");
+                    }}
+                    className="text-xs sm:text-sm text-muted-foreground hover:text-foreground underline"
+                  >
+                    Back to login
+                  </button>
+                </div>
               ) : (
                 <>
-                  {isSignupMode ? "Create Account" : "Sign In"} <ArrowRight className="ml-2 h-4 w-4" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Enter your email and we'll send you a reset link
+                  </p>
+                  {resetError && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="text-sm">{resetError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <form onSubmit={handleForgotPassword} className="space-y-3">
+                    <Input
+                      type="email"
+                      placeholder="student@gannacademy.org"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="bg-white border-slate-200 h-10 sm:h-11 text-sm sm:text-base placeholder:text-muted-foreground/50 focus:border-primary focus:ring-primary/20 transition-all shadow-sm"
+                      required
+                    />
+                    <Button
+                      type="submit"
+                      className="w-full h-10 sm:h-11 text-base font-semibold bg-primary hover:bg-primary/90"
+                      disabled={isResetLoading}
+                    >
+                      {isResetLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Send Reset Link"
+                      )}
+                    </Button>
+                  </form>
+                  <div className="text-center">
+                    <button
+                      onClick={() => {
+                        setShowForgotPassword(false);
+                        setResetError("");
+                        setResetEmail("");
+                      }}
+                      className="text-xs sm:text-sm text-muted-foreground hover:text-foreground underline"
+                    >
+                      Back to login
+                    </button>
+                  </div>
                 </>
               )}
-            </Button>
-          </form>
-
-          <div className="text-center">
-            <button
-              onClick={() => setIsSignupMode(!isSignupMode)}
-              className="text-sm text-muted-foreground hover:text-foreground underline"
-              data-testid="button-toggle-mode"
-            >
-              {isSignupMode ? "Already have an account? Sign in" : "Need an account? Sign up"}
-            </button>
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or use Microsoft</span>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                <strong>Recommended:</strong> Use email sign-in for the best experience! It's faster and more reliable.
+              </div>
 
-          <Button 
-            onClick={handleMicrosoftLogin}
-            variant="outline"
-            className="w-full h-11 text-base font-medium"
-            disabled={isLoading}
-            data-testid="button-microsoft-login"
-          >
-            <svg width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-              <rect width="10" height="10" fill="#F25022"/>
-              <rect x="11" width="10" height="10" fill="#7FBA00"/>
-              <rect y="11" width="10" height="10" fill="#00A4EF"/>
-              <rect x="11" y="11" width="10" height="10" fill="#FFB900"/>
-            </svg>
-            Sign in with Microsoft
-          </Button>
+              <form onSubmit={handleEmailAuth} className="space-y-3">
+                <Input
+                  type="email"
+                  placeholder="student@gannacademy.org"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-white border-slate-200 h-10 sm:h-11 text-sm sm:text-base placeholder:text-muted-foreground/50 focus:border-primary focus:ring-primary/20 transition-all shadow-sm"
+                  data-testid="input-email"
+                  required
+                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password (min. 6 characters)"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-white border-slate-200 h-10 sm:h-11 pr-10 text-sm sm:text-base placeholder:text-muted-foreground/50 focus:border-primary focus:ring-primary/20 transition-all shadow-sm"
+                    data-testid="input-password"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    data-testid="button-toggle-password"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full h-10 sm:h-11 text-base font-semibold bg-primary hover:bg-primary/90"
+                  disabled={isLoading}
+                  data-testid="button-email-auth"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      {isSignupMode ? "Create Account" : "Sign In"} <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </form>
 
-          <div className="text-center text-xs text-muted-foreground">
-            Only @gannacademy.org accounts are allowed
-          </div>
+              <div className="text-center space-y-1">
+                <button
+                  onClick={() => setIsSignupMode(!isSignupMode)}
+                  className="text-xs sm:text-sm text-muted-foreground hover:text-foreground underline"
+                  data-testid="button-toggle-mode"
+                >
+                  {isSignupMode ? "Already have an account? Sign in" : "Need an account? Sign up"}
+                </button>
+                {!isSignupMode && (
+                  <div>
+                    <button
+                      onClick={() => setShowForgotPassword(true)}
+                      className="text-xs sm:text-sm text-muted-foreground hover:text-foreground underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-muted-foreground">Or use Microsoft</span>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleMicrosoftLogin}
+                variant="outline"
+                className="w-full h-10 sm:h-11 text-base font-medium"
+                disabled={isLoading}
+                data-testid="button-microsoft-login"
+              >
+                <svg width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                  <rect width="10" height="10" fill="#F25022"/>
+                  <rect x="11" width="10" height="10" fill="#7FBA00"/>
+                  <rect y="11" width="10" height="10" fill="#00A4EF"/>
+                  <rect x="11" y="11" width="10" height="10" fill="#FFB900"/>
+                </svg>
+                Sign in with Microsoft
+              </Button>
+
+              <div className="text-center text-xs text-muted-foreground">
+                Only @gannacademy.org accounts are allowed
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

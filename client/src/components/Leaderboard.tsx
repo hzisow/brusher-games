@@ -57,6 +57,12 @@ export default function Leaderboard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
+        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-amber-500 flex-shrink-0" />
+          <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+            2025 Champion: Eben Paris
+          </span>
+        </div>
         <div className="relative mb-3">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -97,12 +103,6 @@ export default function Leaderboard() {
               </div>
             ))
           )}
-        </div>
-        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-amber-500 flex-shrink-0" />
-          <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
-            2025 Champion: Eben Paris
-          </span>
         </div>
       </CardContent>
     </Card>
