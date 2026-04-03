@@ -1,17 +1,12 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertTagEventSchema, insertFeedbackSchema, passwordResetTokens } from "@shared/schema";
+import { insertUserSchema, insertTagEventSchema, insertFeedbackSchema } from "@shared/schema";
 import { WebSocketServer } from "ws";
 import * as msal from "@azure/msal-node";
 import bcrypt from "bcrypt";
-import crypto from "crypto";
-import { sendPasswordResetEmail, sendAdminNotification, isEmailConfigured } from "./email";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "goheifersbrushergames";
-
-// In-memory store for password reset tokens (short-lived, 1 hour)
-const resetTokens = new Map<string, { email: string; expiresAt: number }>();
 
 // Rate limiting: track recent actions per user
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -251,7 +246,12 @@ export async function registerRoutes(
 
       // Find or create user
       let user = await storage.getUserByEmail(email);
-      
+
+      if (user && user.password) {
+        // User exists with a password — they signed up via email, block Microsoft login
+        return res.redirect("/login?error=email_exists_password");
+      }
+
       if (!user) {
         user = await storage.createUser({
           name,
@@ -293,6 +293,10 @@ export async function registerRoutes(
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
+        // If the existing account was created via Microsoft OAuth (no password), block email signup
+        if (!existingUser.password) {
+          return res.status(400).json({ message: "This email is already registered with Microsoft sign-in. Please use the Microsoft button." });
+        }
         return res.status(400).json({ message: "Account already exists. Please sign in instead." });
       }
 
@@ -401,70 +405,10 @@ export async function registerRoutes(
     });
   });
 
-  // Password Reset Routes
-  app.post("/api/auth/forgot-password", async (req, res) => {
-    try {
-      const { email } = req.body;
-
-      if (!email || !email.endsWith('@gannacademy.org')) {
-        return res.status(400).json({ message: "Invalid email. Must be @gannacademy.org" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-
-      // Always return success to avoid revealing if account exists
-      if (user) {
-        const token = crypto.randomBytes(32).toString('hex');
-        resetTokens.set(token, { email, expiresAt: Date.now() + 60 * 60 * 1000 });
-
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        sendPasswordResetEmail(email, token, baseUrl);
-      }
-
-      return res.json({ success: true, message: "If an account exists, a reset link has been sent." });
-    } catch (error) {
-      console.error('Forgot password error:', error);
-      return res.status(500).json({ message: "Failed to process password reset request" });
-    }
-  });
-
-  app.post("/api/auth/reset-password", async (req, res) => {
-    try {
-      const { token, password } = req.body;
-
-      if (!token) {
-        return res.status(400).json({ message: "Reset token is required" });
-      }
-
-      if (!password || password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
-      }
-
-      const tokenData = resetTokens.get(token);
-      if (!tokenData) {
-        return res.status(400).json({ message: "Invalid or expired reset token" });
-      }
-
-      if (Date.now() > tokenData.expiresAt) {
-        resetTokens.delete(token);
-        return res.status(400).json({ message: "Reset token has expired" });
-      }
-
-      const user = await storage.getUserByEmail(tokenData.email);
-      if (!user) {
-        resetTokens.delete(token);
-        return res.status(400).json({ message: "User not found" });
-      }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await storage.updateUser(user.id, { password: hashedPassword });
-
-      resetTokens.delete(token);
-      return res.json({ success: true });
-    } catch (error) {
-      console.error('Reset password error:', error);
-      return res.status(500).json({ message: "Failed to reset password" });
-    }
+  // [Password reset routes removed]
+  // Placeholder to maintain code structure
+  app.post("/api/auth/forgot-password", async (_req, res) => {
+    return res.status(501).json({ message: "Password reset is not available" });
   });
 
   app.get("/api/auth/me", async (req, res) => {
@@ -649,13 +593,6 @@ export async function registerRoutes(
       });
 
       broadcastGameState();
-
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (adminEmail) {
-        const victim = await storage.getUser(victimId);
-        sendAdminNotification(adminEmail, 'New Dispute Filed', `${victim?.name || 'A player'} has disputed a tag. Message: ${message || 'No message'}`);
-      }
-
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ message: "Failed to dispute tag" });
@@ -1003,11 +940,6 @@ export async function registerRoutes(
         targetName: accused.name,
         details: description,
       });
-
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (adminEmail) {
-        sendAdminNotification(adminEmail, 'New Rule Violation Report', `${reporter.name} reported ${accused.name}: ${description}`);
-      }
 
       return res.json(violation);
     } catch (error) {
