@@ -57,7 +57,7 @@ function getMsalClient(): msal.ConfidentialClientApplication | null {
   const msalConfig: msal.Configuration = {
     auth: {
       clientId,
-      authority: "https://login.microsoftonline.com/common",
+      authority: "https://login.microsoftonline.com/bed2d6c7-d46f-4941-81d1-e2483b4b78bc",
       clientSecret,
     },
   };
