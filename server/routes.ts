@@ -6,7 +6,7 @@ import { WebSocketServer } from "ws";
 import * as msal from "@azure/msal-node";
 import bcrypt from "bcrypt";
 
-const ADMIN_PASSWORD = "goheifersbrushergames";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "goheifersbrushergames";
 
 // Rate limiting: track recent actions per user
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
