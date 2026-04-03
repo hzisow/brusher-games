@@ -143,6 +143,10 @@ export default function Login() {
             </div>
           </div>
 
+          <p className="text-xs text-center text-muted-foreground">
+            If you previously signed in with Microsoft, you must continue using Microsoft. Email/password login is only for accounts created with email.
+          </p>
+
           <form onSubmit={handleEmailAuth} className="space-y-3">
             <Input
               type="email"
