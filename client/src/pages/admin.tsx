@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, UserPlus, Trash2, Lock, ShieldAlert, MessageSquare, Megaphone, PauseCircle, PlayCircle, FileText, AlertOctagon, Clock, Zap, Plus } from "lucide-react";
+import { RefreshCw, UserPlus, Trash2, Lock, ShieldAlert, MessageSquare, Megaphone, PauseCircle, PlayCircle, FileText, AlertOctagon, Clock, Zap, Plus, Search, Download, BarChart3, CheckSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatDistanceToNow } from "date-fns";
 
 interface DisputeDetail {
@@ -55,6 +56,14 @@ interface GameStatus {
   pauseMessage: string | null;
 }
 
+interface AdminStats {
+  totalPlayers: number;
+  totalKills: number;
+  killsByDay: Record<string, number>;
+  topKillers: { name: string; kills: number }[];
+  statusBreakdown: { alive: number; eliminated: number; disputed: number; pending: number };
+}
+
 interface SpecialRule {
   id: string;
   title: string;
@@ -71,6 +80,8 @@ export default function AdminDashboard() {
   const [pauseMessage, setPauseMessage] = useState("");
   const [specialRuleTitle, setSpecialRuleTitle] = useState("");
   const [specialRuleDescription, setSpecialRuleDescription] = useState("");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   const { data: disputes = [] } = useQuery<DisputeDetail[]>({
@@ -132,6 +143,17 @@ export default function AdminDashboard() {
       return res.json();
     },
     enabled: isAdminAuthenticated,
+  });
+
+  const { data: adminStats } = useQuery<AdminStats>({
+    queryKey: ['adminStats'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/stats');
+      if (!res.ok) throw new Error('Failed to fetch stats');
+      return res.json();
+    },
+    enabled: isAdminAuthenticated,
+    refetchInterval: 10000,
   });
 
   const createAnnouncementMutation = useMutation({
@@ -248,6 +270,23 @@ export default function AdminDashboard() {
     },
   });
 
+  const bulkActionMutation = useMutation({
+    mutationFn: async ({ userIds, action }: { userIds: string[]; action: 'eliminate' | 'revive' }) => {
+      const res = await fetch('/api/admin/bulk-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds, action }),
+      });
+      if (!res.ok) throw new Error('Failed to perform bulk action');
+      return res.json();
+    },
+    onSuccess: () => {
+      setSelectedUsers(new Set());
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+    },
+  });
+
   if (!currentUser) {
     return <div className="text-center py-20 text-muted-foreground">Please log in first</div>;
   }
@@ -298,7 +337,7 @@ export default function AdminDashboard() {
               <PlayCircle className="h-4 w-4" /> <span className="hidden sm:inline">Resume</span> Game
             </Button>
           ) : (
-            <Button onClick={() => pauseGameMutation.mutate(pauseMessage || 'Game paused by admin')} variant="outline" className="gap-2 border-yellow-300 text-yellow-700 hover:bg-yellow-50" size="sm">
+            <Button onClick={() => pauseGameMutation.mutate(pauseMessage || 'Game paused by admin')} variant="outline" className="gap-2 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10" size="sm">
               <PauseCircle className="h-4 w-4" /> <span className="hidden sm:inline">Pause</span> Game
             </Button>
           )}
@@ -315,41 +354,44 @@ export default function AdminDashboard() {
             <div className="text-xs text-muted-foreground">Total Players</div>
           </CardContent>
         </Card>
-        <Card className="bg-green-50 border-green-100">
+        <Card className="bg-green-500/10 border-green-500/20">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">{aliveCount}</div>
-            <div className="text-xs text-green-600/70">Alive</div>
+            <div className="text-2xl font-bold text-green-500">{aliveCount}</div>
+            <div className="text-xs text-green-500/70">Alive</div>
           </CardContent>
         </Card>
-        <Card className="bg-red-50 border-red-100">
+        <Card className="bg-red-500/10 border-red-500/20">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-red-600">{eliminatedCount}</div>
-            <div className="text-xs text-red-600/70">Eliminated</div>
+            <div className="text-2xl font-bold text-red-500">{eliminatedCount}</div>
+            <div className="text-xs text-red-500/70">Eliminated</div>
           </CardContent>
         </Card>
-        <Card className="bg-yellow-50 border-yellow-100">
+        <Card className="bg-yellow-500/10 border-yellow-500/20">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-600">{disputedCount}</div>
-            <div className="text-xs text-yellow-600/70">Disputes</div>
+            <div className="text-2xl font-bold text-yellow-500">{disputedCount}</div>
+            <div className="text-xs text-yellow-500/70">Disputes</div>
           </CardContent>
         </Card>
-        <Card className={gameStatus?.isPaused ? "bg-orange-50 border-orange-200" : "bg-blue-50 border-blue-100"}>
+        <Card className={gameStatus?.isPaused ? "bg-orange-500/10 border-orange-500/20" : "bg-blue-500/10 border-blue-500/20"}>
           <CardContent className="pt-6">
-            <div className={`text-2xl font-bold ${gameStatus?.isPaused ? 'text-orange-600' : 'text-blue-600'}`}>
+            <div className={`text-2xl font-bold ${gameStatus?.isPaused ? 'text-orange-500' : 'text-blue-500'}`}>
               {gameStatus?.isPaused ? 'PAUSED' : 'ACTIVE'}
             </div>
-            <div className={`text-xs ${gameStatus?.isPaused ? 'text-orange-600/70' : 'text-blue-600/70'}`}>Game Status</div>
+            <div className={`text-xs ${gameStatus?.isPaused ? 'text-orange-500/70' : 'text-blue-500/70'}`}>Game Status</div>
           </CardContent>
         </Card>
       </div>
 
       <Tabs defaultValue="disputes" className="w-full">
-        <TabsList className="w-full h-auto flex-wrap grid grid-cols-3 sm:grid-cols-6 gap-1">
+        <TabsList className="w-full h-auto flex-wrap grid grid-cols-4 sm:grid-cols-7 gap-1">
           <TabsTrigger value="disputes" className="gap-1 text-xs sm:text-sm px-2">
             <ShieldAlert className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden xs:inline">Disputes</span> {disputes.length > 0 && `(${disputes.length})`}
           </TabsTrigger>
           <TabsTrigger value="players" className="gap-1 text-xs sm:text-sm px-2">
             Players
+          </TabsTrigger>
+          <TabsTrigger value="stats" className="gap-1 text-xs sm:text-sm px-2">
+            <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Stats</span>
           </TabsTrigger>
           <TabsTrigger value="announcements" className="gap-1 text-xs sm:text-sm px-2">
             <Megaphone className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Announce</span>
@@ -375,7 +417,7 @@ export default function AdminDashboard() {
           ) : (
             <div className="space-y-4">
               {disputes.map(dispute => (
-                <Card key={dispute.id} className="border-yellow-200 bg-yellow-50">
+                <Card key={dispute.id} className="border-yellow-500/20 bg-yellow-500/10">
                   <CardContent className="pt-4 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:justify-between gap-2">
                       <div>
@@ -394,22 +436,22 @@ export default function AdminDashboard() {
                     </div>
                     
                     {dispute.disputeMessage && (
-                      <div className="bg-white border border-yellow-200 rounded-lg p-3">
+                      <div className="bg-background border border-yellow-500/20 rounded-lg p-3">
                         <div className="flex items-start gap-2">
-                          <MessageSquare className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <MessageSquare className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
                           <div>
-                            <p className="text-xs font-medium text-yellow-700 mb-1">Dispute Reason:</p>
+                            <p className="text-xs font-medium text-yellow-500 mb-1">Dispute Reason:</p>
                             <p className="text-sm text-foreground">{dispute.disputeMessage}</p>
                           </div>
                         </div>
                       </div>
                     )}
                     
-                    <div className="flex gap-2 justify-end pt-2 border-t border-yellow-200">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100" 
+                    <div className="flex gap-2 justify-end pt-2 border-t border-yellow-500/20">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20" 
                         onClick={() => adminResolveDispute(dispute.id, 'revive')}
                         data-testid={`button-revive-${dispute.id}`}
                       >
@@ -434,51 +476,253 @@ export default function AdminDashboard() {
         <TabsContent value="players" className="mt-6">
           <Card className="border-border shadow-sm bg-card">
             <CardHeader>
-              <CardTitle>Player Registry</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle>Player Registry</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => window.location.href = '/api/admin/export/players'}>
+                    <Download className="h-3 w-3" /> Export Players CSV
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => window.location.href = '/api/admin/export/kills'}>
+                    <Download className="h-3 w-3" /> Export Kills CSV
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => window.location.href = '/api/admin/export/activity'}>
+                    <Download className="h-3 w-3" /> Export Activity CSV
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-muted/50 border-border">
-                    <TableHead className="min-w-[100px]">Name</TableHead>
-                    <TableHead className="hidden sm:table-cell">Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Target</TableHead>
-                    <TableHead>Kills</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id} className="hover:bg-muted/50 border-border">
-                      <TableCell className="font-medium text-sm">{user.name}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs hidden sm:table-cell max-w-[150px] truncate">{user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          user.status === 'alive' ? 'default' : 
-                          user.status === 'pending_confirmation' ? 'secondary' : 
-                          'destructive'
-                        } className={`text-xs ${user.status === 'disputed' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}>
-                          {user.status === 'pending_confirmation' ? 'pending' : user.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs hidden md:table-cell">
-                        {user.targetId ? users.find(u => u.id === user.targetId)?.name : '-'}
-                      </TableCell>
-                      <TableCell>{user.kills}</TableCell>
-                      <TableCell className="text-right">
-                        {user.status !== 'alive' && (
-                          <Button size="sm" variant="outline" onClick={() => adminRevivePlayer(user.id)} className="h-7 text-xs gap-1 text-green-600 border-green-200 hover:bg-green-50">
-                            <UserPlus className="h-3 w-3" /> <span className="hidden sm:inline">Revive</span>
-                          </Button>
-                        )}
-                      </TableCell>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search players by name or email..."
+                    value={playerSearch}
+                    onChange={(e) => setPlayerSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                {selectedUsers.size > 0 && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="gap-1"
+                      onClick={() => bulkActionMutation.mutate({ userIds: Array.from(selectedUsers), action: 'eliminate' })}
+                      disabled={bulkActionMutation.isPending}
+                    >
+                      Eliminate Selected ({selectedUsers.size})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-green-500 border-green-500/30 hover:bg-green-500/10"
+                      onClick={() => bulkActionMutation.mutate({ userIds: Array.from(selectedUsers), action: 'revive' })}
+                      disabled={bulkActionMutation.isPending}
+                    >
+                      Revive Selected ({selectedUsers.size})
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-muted/50 border-border">
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={users.length > 0 && selectedUsers.size === users.filter(u => {
+                            const search = playerSearch.toLowerCase();
+                            return !search || u.name.toLowerCase().includes(search) || u.email.toLowerCase().includes(search);
+                          }).length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              const filtered = users.filter(u => {
+                                const search = playerSearch.toLowerCase();
+                                return !search || u.name.toLowerCase().includes(search) || u.email.toLowerCase().includes(search);
+                              });
+                              setSelectedUsers(new Set(filtered.map(u => u.id)));
+                            } else {
+                              setSelectedUsers(new Set());
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead className="min-w-[100px]">Name</TableHead>
+                      <TableHead className="hidden sm:table-cell">Email</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="hidden md:table-cell">Target</TableHead>
+                      <TableHead>Kills</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {users
+                      .filter(user => {
+                        const search = playerSearch.toLowerCase();
+                        if (!search) return true;
+                        return user.name.toLowerCase().includes(search) || user.email.toLowerCase().includes(search);
+                      })
+                      .map((user) => (
+                      <TableRow key={user.id} className="hover:bg-muted/50 border-border">
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedUsers.has(user.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedUsers);
+                              if (checked) {
+                                next.add(user.id);
+                              } else {
+                                next.delete(user.id);
+                              }
+                              setSelectedUsers(next);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium text-sm">{user.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs hidden sm:table-cell max-w-[150px] truncate">{user.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            user.status === 'alive' ? 'default' :
+                            user.status === 'pending_confirmation' ? 'secondary' :
+                            'destructive'
+                          } className={`text-xs ${user.status === 'disputed' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}>
+                            {user.status === 'pending_confirmation' ? 'pending' : user.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs hidden md:table-cell">
+                          {user.targetId ? users.find(u => u.id === user.targetId)?.name : '-'}
+                        </TableCell>
+                        <TableCell>{user.kills}</TableCell>
+                        <TableCell className="text-right">
+                          {user.status !== 'alive' && (
+                            <Button size="sm" variant="outline" onClick={() => adminRevivePlayer(user.id)} className="h-7 text-xs gap-1 text-green-500 border-green-500/20 hover:bg-green-500/10">
+                              <UserPlus className="h-3 w-3" /> <span className="hidden sm:inline">Revive</span>
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="stats" className="mt-6 space-y-6">
+          {adminStats ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="bg-card border-border">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-foreground">{adminStats.totalPlayers}</div>
+                    <div className="text-xs text-muted-foreground">Total Players</div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-card border-border">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-foreground">{adminStats.totalKills}</div>
+                    <div className="text-xs text-muted-foreground">Total Kills</div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-card border-border">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-foreground">
+                      {adminStats.totalPlayers > 0 ? (adminStats.totalKills / adminStats.totalPlayers).toFixed(1) : '0'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Avg Kills per Player</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border-border">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" /> Top Killers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {adminStats.topKillers.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No kills recorded yet</p>
+                  ) : (
+                    adminStats.topKillers.map((killer, i) => {
+                      const maxKills = adminStats.topKillers[0]?.kills || 1;
+                      const pct = (killer.kills / maxKills) * 100;
+                      return (
+                        <div key={i} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium">{killer.name}</span>
+                            <span className="text-muted-foreground">{killer.kills} kills</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2.5">
+                            <div
+                              className="bg-primary h-2.5 rounded-full transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border">
+                <CardHeader>
+                  <CardTitle>Status Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-3">
+                    <Badge className="bg-green-500/10 text-green-500 border-green-500/20 text-sm px-3 py-1">
+                      Alive: {adminStats.statusBreakdown.alive}
+                    </Badge>
+                    <Badge className="bg-red-500/10 text-red-500 border-red-500/20 text-sm px-3 py-1">
+                      Eliminated: {adminStats.statusBreakdown.eliminated}
+                    </Badge>
+                    <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 text-sm px-3 py-1">
+                      Disputed: {adminStats.statusBreakdown.disputed}
+                    </Badge>
+                    <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-sm px-3 py-1">
+                      Pending: {adminStats.statusBreakdown.pending}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 w-full bg-muted rounded-full h-4 flex overflow-hidden">
+                    {adminStats.totalPlayers > 0 && (
+                      <>
+                        <div
+                          className="bg-green-500 h-4 transition-all"
+                          style={{ width: `${(adminStats.statusBreakdown.alive / adminStats.totalPlayers) * 100}%` }}
+                          title={`Alive: ${adminStats.statusBreakdown.alive}`}
+                        />
+                        <div
+                          className="bg-red-500 h-4 transition-all"
+                          style={{ width: `${(adminStats.statusBreakdown.eliminated / adminStats.totalPlayers) * 100}%` }}
+                          title={`Eliminated: ${adminStats.statusBreakdown.eliminated}`}
+                        />
+                        <div
+                          className="bg-yellow-500 h-4 transition-all"
+                          style={{ width: `${(adminStats.statusBreakdown.disputed / adminStats.totalPlayers) * 100}%` }}
+                          title={`Disputed: ${adminStats.statusBreakdown.disputed}`}
+                        />
+                        <div
+                          className="bg-blue-500 h-4 transition-all"
+                          style={{ width: `${(adminStats.statusBreakdown.pending / adminStats.totalPlayers) * 100}%` }}
+                          title={`Pending: ${adminStats.statusBreakdown.pending}`}
+                        />
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card className="border-border">
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                Loading stats...
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="announcements" className="mt-6 space-y-6">
@@ -633,7 +877,7 @@ export default function AdminDashboard() {
                 <p className="text-muted-foreground text-center py-4">No reports submitted</p>
               ) : (
                 violations.map(v => (
-                  <div key={v.id} className={`p-4 border rounded-lg ${v.status === 'pending' ? 'bg-orange-50 border-orange-200' : 'bg-muted/30'}`}>
+                  <div key={v.id} className={`p-4 border rounded-lg ${v.status === 'pending' ? 'bg-orange-500/10 border-orange-500/20' : 'bg-muted/30'}`}>
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-medium">{v.reporterName} reported {v.accusedName}</p>
@@ -647,7 +891,7 @@ export default function AdminDashboard() {
                     </div>
                     <p className="text-sm text-foreground mb-3 p-2 bg-background rounded border">{v.description}</p>
                     {v.status === 'resolved' && v.resolution && (
-                      <p className="text-sm text-green-700 bg-green-50 p-2 rounded">Resolution: {v.resolution}</p>
+                      <p className="text-sm text-green-500 bg-green-500/10 p-2 rounded">Resolution: {v.resolution}</p>
                     )}
                     {v.status === 'pending' && (
                       <div className="flex gap-2">

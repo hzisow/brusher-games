@@ -1,14 +1,27 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGame } from "@/lib/gameContext";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { Target, Skull, AlertTriangle, CheckCircle2, Clock, Crosshair, Sparkles, ShieldAlert, Timer, Zap } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Target, Skull, AlertTriangle, CheckCircle2, Clock, Crosshair, Sparkles, ShieldAlert, Timer, Zap, Swords, History } from "lucide-react";
 import type { SpecialRule } from "@shared/schema";
 import { motion } from "framer-motion";
+import { formatDistanceToNow } from "date-fns";
 import FeedbackForm from "@/components/FeedbackForm";
 import Leaderboard from "@/components/Leaderboard";
 import KillFeed from "@/components/KillFeed";
@@ -48,8 +61,11 @@ function CountdownTimer({ expiresAt }: { expiresAt: Date }) {
 
 export default function Dashboard() {
   const { currentUser, users, reportTag, confirmDeath, disputeDeath } = useGame();
+  const queryClient = useQueryClient();
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeMessage, setDisputeMessage] = useState("");
+  const [evidenceData, setEvidenceData] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Fetch pending tag info for countdown timer
   const { data: pendingTag } = useQuery({
@@ -73,6 +89,62 @@ export default function Dashboard() {
     },
     staleTime: 10000,
   });
+
+  // Fetch kill history
+  const { data: killHistory = [] } = useQuery<Array<{ id: string; victimName: string; timestamp: string }>>({
+    queryKey: ['killHistory'],
+    queryFn: async () => {
+      const res = await fetch('/api/kill-history');
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!currentUser,
+  });
+
+  // Fetch dispute timeline
+  const { data: disputeTimeline = [] } = useQuery<Array<{ id: string; hunterName: string; victimName: string; status: string; timestamp: string; role: 'hunter' | 'victim' }>>({
+    queryKey: ['disputeTimeline'],
+    queryFn: async () => {
+      const res = await fetch('/api/dispute-timeline');
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!currentUser,
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setEvidenceData(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setEvidenceData(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitDispute = async () => {
+    try {
+      await fetch('/api/tags/dispute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: disputeMessage,
+          evidenceData: evidenceData || undefined,
+        }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['disputeTimeline'] });
+      queryClient.invalidateQueries({ queryKey: ['pendingTag'] });
+    } catch (err) {
+      console.error('Failed to submit dispute:', err);
+    }
+    setShowDisputeForm(false);
+    setDisputeMessage("");
+    setEvidenceData(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   if (!currentUser) return null;
 
@@ -135,23 +207,33 @@ export default function Dashboard() {
                      className="min-h-[100px] bg-background"
                      data-testid="input-dispute-message"
                    />
+                   <div className="space-y-2">
+                     <p className="text-sm text-muted-foreground">Optionally attach photo evidence</p>
+                     <Input
+                       ref={fileInputRef}
+                       type="file"
+                       accept="image/*"
+                       onChange={handleFileSelect}
+                       className="bg-background"
+                       data-testid="input-dispute-evidence"
+                     />
+                     {evidenceData && (
+                       <p className="text-xs text-green-600">Image attached</p>
+                     )}
+                   </div>
                    <div className="flex gap-2 justify-end">
-                     <Button 
-                       variant="ghost" 
-                       size="sm" 
-                       onClick={() => { setShowDisputeForm(false); setDisputeMessage(""); }}
+                     <Button
+                       variant="ghost"
+                       size="sm"
+                       onClick={() => { setShowDisputeForm(false); setDisputeMessage(""); setEvidenceData(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
                        data-testid="button-cancel-dispute"
                      >
                         Cancel
                      </Button>
-                     <Button 
-                       variant="destructive" 
-                       size="sm" 
-                       onClick={() => {
-                         disputeDeath(disputeMessage);
-                         setShowDisputeForm(false);
-                         setDisputeMessage("");
-                       }}
+                     <Button
+                       variant="destructive"
+                       size="sm"
+                       onClick={handleSubmitDispute}
                        disabled={!disputeMessage.trim()}
                        data-testid="button-submit-dispute"
                      >
@@ -272,12 +354,27 @@ export default function Dashboard() {
             <p className="text-muted-foreground mb-4 text-sm">
               If you have successfully tagged your target, report it here. They will need to confirm it.
             </p>
-            <Button 
-              className="w-full sm:w-auto text-lg py-6 shadow-md bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={reportTag}
-            >
-              I TAGGED {target.name.toUpperCase()}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  className="w-full sm:w-auto text-lg py-6 shadow-md bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  I TAGGED {target.name.toUpperCase()}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure you tagged {target.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will notify {target.name} that you have tagged them. They will have 1 hour to confirm or dispute. Make sure you actually completed a valid tag before reporting.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={reportTag}>Confirm Tag</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       )}
@@ -351,6 +448,79 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Your Eliminations (Kill History Timeline) */}
+      <Card className="border-border bg-card/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+            <Swords className="h-4 w-4" />
+            Your Eliminations
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {killHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No eliminations yet</p>
+          ) : (
+            <div className="space-y-3">
+              {killHistory.map((kill) => (
+                <div key={kill.id} className="flex items-center gap-3 border-l-2 border-primary/40 pl-3">
+                  <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{kill.victimName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(kill.timestamp), { addSuffix: true })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tag History (Dispute Timeline) */}
+      {disputeTimeline.length > 0 && (
+        <Card className="border-border bg-card/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Tag History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {disputeTimeline.map((event) => {
+                const statusColors: Record<string, string> = {
+                  pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
+                  confirmed: "bg-green-100 text-green-800 border-green-300",
+                  disputed: "bg-orange-100 text-orange-800 border-orange-300",
+                  denied: "bg-red-100 text-red-800 border-red-300",
+                  expired: "bg-gray-100 text-gray-800 border-gray-300",
+                };
+                return (
+                  <div key={event.id} className="flex items-center justify-between gap-3 border-l-2 border-muted-foreground/30 pl-3 py-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground">
+                        {event.role === 'hunter' ? (
+                          <>You tagged <strong>{event.victimName}</strong></>
+                        ) : (
+                          <><strong>{event.hunterName}</strong> tagged you</>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className={`text-xs shrink-0 ${statusColors[event.status] || ''}`}>
+                      {event.status}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Leaderboard & Kill Feed */}
       <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">

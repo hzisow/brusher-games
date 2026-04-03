@@ -1,13 +1,33 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useGame } from "@/lib/gameContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Shield, FileText } from "lucide-react";
+import { LogOut, Shield, FileText, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import gannLogo from "@assets/Gann_Academy__MA__Red_Heifers_2_Logo_1765161174122.png";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { currentUser, logout } = useGame();
   const [location] = useLocation();
+
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("theme");
+      if (stored) return stored === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDark]);
 
   if (!currentUser) return <div className="min-h-screen bg-background">{children}</div>;
 
@@ -34,6 +54,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </a>
              </Button>
             
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsDark((prev) => !prev)}
+              className="h-9 w-9"
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+
             <div className="flex items-center gap-3 pl-4 border-l border-border">
               <div className="text-right hidden sm:block">
                 <div className="text-sm font-medium leading-none text-foreground">{currentUser.name}</div>

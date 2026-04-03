@@ -21,6 +21,7 @@ export const tagEvents = pgTable("tag_events", {
   victimId: varchar("victim_id").notNull(),
   status: text("status").notNull().default('pending'),
   disputeMessage: text("dispute_message"),
+  evidenceData: text("evidence_data"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),
 });

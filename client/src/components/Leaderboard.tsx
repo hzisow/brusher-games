@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Medal, Crown, Skull, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Trophy, Medal, Crown, Skull, User, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface LeaderboardEntry {
@@ -11,6 +13,8 @@ interface LeaderboardEntry {
 }
 
 export default function Leaderboard() {
+  const [search, setSearch] = useState("");
+
   const { data: leaderboard = [] } = useQuery<LeaderboardEntry[]>({
     queryKey: ["leaderboard"],
     queryFn: async () => {
@@ -27,7 +31,9 @@ export default function Leaderboard() {
     const hasSpace = trimmedName.includes(' ');
     const notEmail = !trimmedName.includes('@');
     return hasSpace && notEmail;
-  });
+  }).filter(player =>
+    player.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const getRankIcon = (index: number) => {
     switch (index) {
@@ -51,11 +57,20 @@ export default function Leaderboard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="space-y-2">
+        <div className="relative mb-3">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search players..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
+        <div className="max-h-[400px] overflow-y-auto space-y-2">
           {filteredLeaderboard.length === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-4">No players yet</p>
           ) : (
-            filteredLeaderboard.slice(0, 5).map((player, index) => (
+            filteredLeaderboard.map((player, index) => (
               <div
                 key={player.id}
                 className={`flex items-center gap-2 sm:gap-3 p-2 rounded-lg ${
@@ -82,6 +97,12 @@ export default function Leaderboard() {
               </div>
             ))
           )}
+        </div>
+        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-amber-500 flex-shrink-0" />
+          <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+            2025 Champion: Eben Paris
+          </span>
         </div>
       </CardContent>
     </Card>

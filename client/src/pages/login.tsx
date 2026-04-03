@@ -4,7 +4,8 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowRight, Loader2, FileText, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Loader2, FileText, AlertCircle, Eye, EyeOff, Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import FeedbackForm from "@/components/FeedbackForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import gannLogo from "@assets/Gann_Academy__MA__Red_Heifers_2_Logo_1765161174122.png";
@@ -16,6 +17,16 @@ export default function Login() {
   const [isSignupMode, setIsSignupMode] = useState(true);
   const { login, signup, isLoading, currentUser } = useGame();
   const [, setLocation] = useLocation();
+
+  const { data: playerCount } = useQuery<{ total: number; alive: number }>({
+    queryKey: ["player-count"],
+    queryFn: async () => {
+      const res = await fetch("/api/player-count");
+      if (!res.ok) throw new Error("Failed to fetch player count");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
@@ -73,6 +84,13 @@ export default function Login() {
             </a>
          </Button>
       </div>
+
+      {playerCount && (
+        <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-sm font-medium z-10">
+          <Users className="h-3.5 w-3.5" />
+          <span>{playerCount.alive} players active</span>
+        </div>
+      )}
 
       <Card className="w-full max-w-md relative z-10 border-border/50 bg-white/80 backdrop-blur-xl shadow-xl">
         <CardHeader className="text-center space-y-3 sm:space-y-4 pt-6 sm:pt-10">

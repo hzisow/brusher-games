@@ -562,16 +562,17 @@ export async function registerRoutes(
   app.post("/api/tags/dispute", requireAuth, async (req, res) => {
     try {
       const victimId = req.session.userId!;
-      const { message } = req.body;
-      
+      const { message, evidenceData } = req.body;
+
       const tagEvent = await storage.getPendingTagForVictim(victimId);
       if (tagEvent) {
         await storage.updateTagEvent(tagEvent.id, {
           status: 'disputed',
           disputeMessage: message || null,
+          evidenceData: evidenceData || null,
         });
       }
-      
+
       await storage.updateUser(victimId, {
         status: 'disputed',
       });
@@ -730,14 +731,13 @@ export async function registerRoutes(
     }
   });
 
-  // Leaderboard
+  // Leaderboard - now returns all players (no limit)
   app.get("/api/leaderboard", async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const leaderboard = allUsers
         .filter(u => u.role === 'player')
         .filter(u => {
-          // Only show users who have set up their full name (first + last)
           const trimmedName = u.name.trim();
           const hasSpace = trimmedName.includes(' ');
           const notEmail = !trimmedName.includes('@');
@@ -1043,7 +1043,7 @@ export async function registerRoutes(
   app.delete("/api/admin/special-rules/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteSpecialRule(req.params.id);
-      
+
       const admin = await storage.getUser(req.session.userId!);
       await storage.createActivityLog({
         action: 'special_rule_deleted',
@@ -1056,6 +1056,190 @@ export async function registerRoutes(
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ message: "Failed to delete special rule" });
+    }
+  });
+
+  // Kill History - player's personal tag history
+  app.get("/api/kill-history", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const tags = await storage.getTagsForUser(userId);
+      const allUsers = await storage.getAllUsers();
+
+      const history = tags
+        .filter(t => t.status === 'confirmed' && t.hunterId === userId)
+        .map(t => {
+          const victim = allUsers.find(u => u.id === t.victimId);
+          return {
+            id: t.id,
+            victimName: victim?.name || 'Unknown',
+            timestamp: t.resolvedAt,
+          };
+        });
+
+      return res.json(history);
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to fetch kill history" });
+    }
+  });
+
+  // Dispute timeline - get tag events for current user with status info
+  app.get("/api/dispute-timeline", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const tags = await storage.getTagsForUser(userId);
+      const allUsers = await storage.getAllUsers();
+
+      const timeline = tags.map(t => {
+        const hunter = allUsers.find(u => u.id === t.hunterId);
+        const victim = allUsers.find(u => u.id === t.victimId);
+        return {
+          id: t.id,
+          hunterId: t.hunterId,
+          victimId: t.victimId,
+          hunterName: hunter?.name || 'Unknown',
+          victimName: victim?.name || 'Unknown',
+          status: t.status,
+          disputeMessage: t.disputeMessage,
+          createdAt: t.createdAt,
+          resolvedAt: t.resolvedAt,
+        };
+      });
+
+      return res.json(timeline);
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to fetch dispute timeline" });
+    }
+  });
+
+  // Player count (public - for login page)
+  app.get("/api/player-count", async (_req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const players = allUsers.filter(u => u.role === 'player');
+      return res.json({
+        total: players.length,
+        alive: players.filter(u => u.status === 'alive').length,
+      });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to fetch player count" });
+    }
+  });
+
+  // Admin stats
+  app.get("/api/admin/stats", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const players = allUsers.filter(u => u.role === 'player');
+      const logs = await storage.getActivityLogs(500);
+
+      // Kills per day
+      const killLogs = logs.filter(l => l.action === 'auto_eliminated' || l.action === 'tag_confirmed');
+      const killsByDay: Record<string, number> = {};
+      for (const log of killLogs) {
+        const day = new Date(log.createdAt).toLocaleDateString();
+        killsByDay[day] = (killsByDay[day] || 0) + 1;
+      }
+
+      // Top killers
+      const topKillers = players
+        .filter(u => u.kills > 0)
+        .sort((a, b) => b.kills - a.kills)
+        .slice(0, 10)
+        .map(u => ({ name: u.name, kills: u.kills }));
+
+      // Status breakdown
+      const statusBreakdown = {
+        alive: players.filter(u => u.status === 'alive').length,
+        eliminated: players.filter(u => u.status === 'eliminated').length,
+        disputed: players.filter(u => u.status === 'disputed').length,
+        pending: players.filter(u => u.status === 'pending_confirmation').length,
+      };
+
+      return res.json({
+        totalPlayers: players.length,
+        totalKills: players.reduce((sum, u) => sum + u.kills, 0),
+        killsByDay,
+        topKillers,
+        statusBreakdown,
+      });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // Admin bulk action
+  app.post("/api/admin/bulk-action", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { userIds, action } = req.body;
+
+      if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ message: "No users selected" });
+      }
+
+      if (action === 'eliminate') {
+        await storage.bulkUpdateUsers(userIds, { status: 'eliminated', targetId: null });
+      } else if (action === 'revive') {
+        await storage.bulkUpdateUsers(userIds, { status: 'alive' });
+      } else {
+        return res.status(400).json({ message: "Invalid action" });
+      }
+
+      const admin = await storage.getUser(req.session.userId!);
+      await storage.createActivityLog({
+        action: `bulk_${action}`,
+        actorId: req.session.userId,
+        actorName: admin?.name || 'Admin',
+        details: `Bulk ${action} ${userIds.length} players`,
+      });
+
+      broadcastGameState();
+      return res.json({ success: true, count: userIds.length });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to perform bulk action" });
+    }
+  });
+
+  // Admin CSV export
+  app.get("/api/admin/export/:type", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { type } = req.params;
+
+      if (type === 'players') {
+        const allUsers = await storage.getAllUsers();
+        const csv = ['Name,Email,Status,Kills,Target ID,Created At']
+          .concat(allUsers.map(u =>
+            `"${u.name}","${u.email}","${u.status}",${u.kills},"${u.targetId || ''}","${u.createdAt}"`
+          )).join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=players.csv');
+        return res.send(csv);
+      } else if (type === 'kills') {
+        const tags = await storage.getConfirmedTags(1000);
+        const allUsers = await storage.getAllUsers();
+        const csv = ['Hunter,Victim,Date']
+          .concat(tags.map(t => {
+            const hunter = allUsers.find(u => u.id === t.hunterId);
+            const victim = allUsers.find(u => u.id === t.victimId);
+            return `"${hunter?.name || 'Unknown'}","${victim?.name || 'Unknown'}","${t.resolvedAt || t.createdAt}"`;
+          })).join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=kills.csv');
+        return res.send(csv);
+      } else if (type === 'activity') {
+        const logs = await storage.getActivityLogs(1000);
+        const csv = ['Action,Actor,Target,Details,Date']
+          .concat(logs.map(l =>
+            `"${l.action}","${l.actorName || ''}","${l.targetName || ''}","${(l.details || '').replace(/"/g, '""')}","${l.createdAt}"`
+          )).join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=activity.csv');
+        return res.send(csv);
+      }
+
+      return res.status(400).json({ message: "Invalid export type" });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to export data" });
     }
   });
 

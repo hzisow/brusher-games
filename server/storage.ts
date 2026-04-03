@@ -73,6 +73,12 @@ export interface IStorage {
   getAllSpecialRules(): Promise<SpecialRule[]>;
   updateSpecialRule(id: string, updates: Partial<Omit<SpecialRule, 'id' | 'createdAt'>>): Promise<SpecialRule | undefined>;
   deleteSpecialRule(id: string): Promise<void>;
+
+  // Kill history
+  getTagsForUser(userId: string): Promise<TagEvent[]>;
+
+  // Bulk operations
+  bulkUpdateUsers(userIds: string[], updates: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -292,6 +298,34 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSpecialRule(id: string): Promise<void> {
     await db.delete(specialRules).where(eq(specialRules.id, id));
+  }
+
+  // Kill history - get all tags involving a user (as hunter or victim)
+  async getTagsForUser(userId: string): Promise<TagEvent[]> {
+    return await db
+      .select()
+      .from(tagEvents)
+      .where(
+        sql`${tagEvents.hunterId} = ${userId} OR ${tagEvents.victimId} = ${userId}`
+      )
+      .orderBy(desc(tagEvents.createdAt));
+  }
+
+  // Bulk update users
+  async bulkUpdateUsers(userIds: string[], updates: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const id of userIds) {
+        await db.update(users).set(updates).where(eq(users.id, id));
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 
