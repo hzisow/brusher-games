@@ -69,9 +69,9 @@ export default function Login() {
       case 'microsoft_not_configured':
         return 'Microsoft sign-in is not configured yet. Please use email login for now.';
       case 'email_exists_microsoft':
-        return 'This email is already registered with Microsoft sign-in. Please use the Microsoft button below.';
+        return 'This email is already registered with Microsoft sign-in. Please use the Microsoft button above.';
       case 'email_exists_password':
-        return 'This email is already registered with email/password. Please use email sign-in above.';
+        return 'This email is already registered with email/password. Please use email sign-in below.';
       default:
         return null;
     }
@@ -118,8 +118,29 @@ export default function Login() {
             </Alert>
           )}
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-            <strong>Recommended:</strong> Use email sign-in for the best experience! It's faster and more reliable.
+          <Button
+            onClick={handleMicrosoftLogin}
+            variant="outline"
+            className="w-full h-10 sm:h-11 text-base font-medium"
+            disabled={isLoading}
+            data-testid="button-microsoft-login"
+          >
+            <svg width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+              <rect width="10" height="10" fill="#F25022"/>
+              <rect x="11" width="10" height="10" fill="#7FBA00"/>
+              <rect y="11" width="10" height="10" fill="#00A4EF"/>
+              <rect x="11" y="11" width="10" height="10" fill="#FFB900"/>
+            </svg>
+            Sign in with Microsoft
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-muted-foreground">Or use email</span>
+            </div>
           </div>
 
           <form onSubmit={handleEmailAuth} className="space-y-3">
@@ -177,31 +198,6 @@ export default function Login() {
               {isSignupMode ? "Already have an account? Sign in" : "Need an account? Sign up"}
             </button>
           </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or use Microsoft</span>
-            </div>
-          </div>
-
-          <Button
-            onClick={handleMicrosoftLogin}
-            variant="outline"
-            className="w-full h-10 sm:h-11 text-base font-medium"
-            disabled={isLoading}
-            data-testid="button-microsoft-login"
-          >
-            <svg width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-              <rect width="10" height="10" fill="#F25022"/>
-              <rect x="11" width="10" height="10" fill="#7FBA00"/>
-              <rect y="11" width="10" height="10" fill="#00A4EF"/>
-              <rect x="11" y="11" width="10" height="10" fill="#FFB900"/>
-            </svg>
-            Sign in with Microsoft
-          </Button>
 
           <div className="text-center text-xs text-muted-foreground">
             Only @gannacademy.org accounts are allowed
