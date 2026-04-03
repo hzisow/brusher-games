@@ -331,50 +331,50 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-display font-bold text-foreground">Game Control</h1>
           <p className="text-muted-foreground">Manage players, announcements, and resolve disputes</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
           {gameStatus?.isPaused ? (
-            <Button onClick={() => resumeGameMutation.mutate()} variant="default" className="gap-2 bg-green-600 hover:bg-green-700" size="sm">
-              <PlayCircle className="h-4 w-4" /> <span className="hidden sm:inline">Resume</span> Game
+            <Button onClick={() => resumeGameMutation.mutate()} variant="default" className="gap-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto" size="sm">
+              <PlayCircle className="h-4 w-4" /> Resume Game
             </Button>
           ) : (
-            <Button onClick={() => pauseGameMutation.mutate(pauseMessage || 'Game paused by admin')} variant="outline" className="gap-2 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10" size="sm">
-              <PauseCircle className="h-4 w-4" /> <span className="hidden sm:inline">Pause</span> Game
+            <Button onClick={() => pauseGameMutation.mutate(pauseMessage || 'Game paused by admin')} variant="outline" className="gap-2 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10 w-full sm:w-auto" size="sm">
+              <PauseCircle className="h-4 w-4" /> Pause Game
             </Button>
           )}
-          <Button onClick={adminAssignTargets} variant="outline" className="gap-2 bg-background" size="sm">
-            <RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Shuffle</span> Targets
+          <Button onClick={adminAssignTargets} variant="outline" className="gap-2 bg-background w-full sm:w-auto" size="sm">
+            <RefreshCw className="h-4 w-4" /> Shuffle Targets
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
         <Card className="bg-card border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-foreground">{users.length}</div>
+            <div className="text-3xl sm:text-2xl font-bold text-foreground">{users.length}</div>
             <div className="text-xs text-muted-foreground">Total Players</div>
           </CardContent>
         </Card>
         <Card className="bg-green-500/10 border-green-500/20">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-500">{aliveCount}</div>
+            <div className="text-3xl sm:text-2xl font-bold text-green-500">{aliveCount}</div>
             <div className="text-xs text-green-500/70">Alive</div>
           </CardContent>
         </Card>
         <Card className="bg-red-500/10 border-red-500/20">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-red-500">{eliminatedCount}</div>
+            <div className="text-3xl sm:text-2xl font-bold text-red-500">{eliminatedCount}</div>
             <div className="text-xs text-red-500/70">Eliminated</div>
           </CardContent>
         </Card>
         <Card className="bg-yellow-500/10 border-yellow-500/20">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-500">{disputedCount}</div>
+            <div className="text-3xl sm:text-2xl font-bold text-yellow-500">{disputedCount}</div>
             <div className="text-xs text-yellow-500/70">Disputes</div>
           </CardContent>
         </Card>
-        <Card className={gameStatus?.isPaused ? "bg-orange-500/10 border-orange-500/20" : "bg-blue-500/10 border-blue-500/20"}>
+        <Card className={`col-span-2 sm:col-span-1 ${gameStatus?.isPaused ? "bg-orange-500/10 border-orange-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
           <CardContent className="pt-6">
-            <div className={`text-2xl font-bold ${gameStatus?.isPaused ? 'text-orange-500' : 'text-blue-500'}`}>
+            <div className={`text-3xl sm:text-2xl font-bold ${gameStatus?.isPaused ? 'text-orange-500' : 'text-blue-500'}`}>
               {gameStatus?.isPaused ? 'PAUSED' : 'ACTIVE'}
             </div>
             <div className={`text-xs ${gameStatus?.isPaused ? 'text-orange-500/70' : 'text-blue-500/70'}`}>Game Status</div>
@@ -383,27 +383,27 @@ export default function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="disputes" className="w-full">
-        <TabsList className="w-full h-auto flex-wrap grid grid-cols-4 sm:grid-cols-7 gap-1">
-          <TabsTrigger value="disputes" className="gap-1 text-xs sm:text-sm px-2">
-            <ShieldAlert className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden xs:inline">Disputes</span> {disputes.length > 0 && `(${disputes.length})`}
+        <TabsList className="w-full h-auto flex overflow-x-auto sm:grid sm:grid-cols-7 gap-1 no-scrollbar">
+          <TabsTrigger value="disputes" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
+            <ShieldAlert className="h-3 w-3 sm:h-4 sm:w-4" /> Disputes {disputes.length > 0 && `(${disputes.length})`}
           </TabsTrigger>
-          <TabsTrigger value="players" className="gap-1 text-xs sm:text-sm px-2">
+          <TabsTrigger value="players" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
             Players
           </TabsTrigger>
-          <TabsTrigger value="stats" className="gap-1 text-xs sm:text-sm px-2">
-            <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Stats</span>
+          <TabsTrigger value="stats" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
+            <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" /> Stats
           </TabsTrigger>
-          <TabsTrigger value="announcements" className="gap-1 text-xs sm:text-sm px-2">
-            <Megaphone className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Announce</span>
+          <TabsTrigger value="announcements" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
+            <Megaphone className="h-3 w-3 sm:h-4 sm:w-4" /> Announce
           </TabsTrigger>
-          <TabsTrigger value="specialrules" className="gap-1 text-xs sm:text-sm px-2">
-            <Zap className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Rules</span>
+          <TabsTrigger value="specialrules" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
+            <Zap className="h-3 w-3 sm:h-4 sm:w-4" /> Rules
           </TabsTrigger>
-          <TabsTrigger value="violations" className="gap-1 text-xs sm:text-sm px-2">
-            <AlertOctagon className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden xs:inline">Reports</span> {pendingViolations.length > 0 && `(${pendingViolations.length})`}
+          <TabsTrigger value="violations" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
+            <AlertOctagon className="h-3 w-3 sm:h-4 sm:w-4" /> Reports {pendingViolations.length > 0 && `(${pendingViolations.length})`}
           </TabsTrigger>
-          <TabsTrigger value="logs" className="gap-1 text-xs sm:text-sm px-2">
-            <FileText className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden xs:inline">Activity</span>
+          <TabsTrigger value="logs" className="gap-1 text-xs sm:text-sm px-3 flex-shrink-0 min-h-[44px] sm:min-h-0">
+            <FileText className="h-3 w-3 sm:h-4 sm:w-4" /> Activity
           </TabsTrigger>
         </TabsList>
 
@@ -447,19 +447,20 @@ export default function AdminDashboard() {
                       </div>
                     )}
                     
-                    <div className="flex gap-2 justify-end pt-2 border-t border-yellow-500/20">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-2 border-t border-yellow-500/20">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20" 
+                        className="bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20 w-full sm:w-auto"
                         onClick={() => adminResolveDispute(dispute.id, 'revive')}
                         data-testid={`button-revive-${dispute.id}`}
                       >
                         Revive Player (Invalid Tag)
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="destructive" 
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="w-full sm:w-auto"
                         onClick={() => adminResolveDispute(dispute.id, 'confirm')}
                         data-testid={`button-confirm-kill-${dispute.id}`}
                       >
@@ -478,14 +479,14 @@ export default function AdminDashboard() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardTitle>Player Registry</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => window.location.href = '/api/admin/export/players'}>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-xs w-full sm:w-auto" onClick={() => window.location.href = '/api/admin/export/players'}>
                     <Download className="h-3 w-3" /> Export Players CSV
                   </Button>
-                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => window.location.href = '/api/admin/export/kills'}>
+                  <Button size="sm" variant="outline" className="gap-1 text-xs w-full sm:w-auto" onClick={() => window.location.href = '/api/admin/export/kills'}>
                     <Download className="h-3 w-3" /> Export Kills CSV
                   </Button>
-                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => window.location.href = '/api/admin/export/activity'}>
+                  <Button size="sm" variant="outline" className="gap-1 text-xs w-full sm:w-auto" onClick={() => window.location.href = '/api/admin/export/activity'}>
                     <Download className="h-3 w-3" /> Export Activity CSV
                   </Button>
                 </div>
@@ -503,11 +504,11 @@ export default function AdminDashboard() {
                   />
                 </div>
                 {selectedUsers.size > 0 && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     <Button
                       size="sm"
                       variant="destructive"
-                      className="gap-1"
+                      className="gap-1 w-full sm:w-auto"
                       onClick={() => bulkActionMutation.mutate({ userIds: Array.from(selectedUsers), action: 'eliminate' })}
                       disabled={bulkActionMutation.isPending}
                     >
@@ -516,7 +517,7 @@ export default function AdminDashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="gap-1 text-green-500 border-green-500/30 hover:bg-green-500/10"
+                      className="gap-1 text-green-500 border-green-500/30 hover:bg-green-500/10 w-full sm:w-auto"
                       onClick={() => bulkActionMutation.mutate({ userIds: Array.from(selectedUsers), action: 'revive' })}
                       disabled={bulkActionMutation.isPending}
                     >
@@ -525,7 +526,51 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-              <div className="overflow-x-auto">
+              {/* Mobile card layout */}
+              <div className="sm:hidden space-y-2">
+                {users
+                  .filter(user => {
+                    const search = playerSearch.toLowerCase();
+                    if (!search) return true;
+                    return user.name.toLowerCase().includes(search) || user.email.toLowerCase().includes(search);
+                  })
+                  .map((user) => (
+                  <div key={user.id} className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                    <Checkbox
+                      checked={selectedUsers.has(user.id)}
+                      onCheckedChange={(checked) => {
+                        const next = new Set(selectedUsers);
+                        if (checked) {
+                          next.add(user.id);
+                        } else {
+                          next.delete(user.id);
+                        }
+                        setSelectedUsers(next);
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{user.name}</span>
+                        <Badge variant={
+                          user.status === 'alive' ? 'default' :
+                          user.status === 'pending_confirmation' ? 'secondary' :
+                          'destructive'
+                        } className={`text-xs ${user.status === 'disputed' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}>
+                          {user.status === 'pending_confirmation' ? 'pending' : user.status}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{user.kills} kills</div>
+                    </div>
+                    {user.status !== 'alive' && (
+                      <Button size="sm" variant="outline" onClick={() => adminRevivePlayer(user.id)} className="h-8 text-xs gap-1 text-green-500 border-green-500/20 hover:bg-green-500/10 flex-shrink-0">
+                        <UserPlus className="h-3 w-3" /> Revive
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table layout */}
+              <div className="overflow-x-auto hidden sm:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-muted/50 border-border">
