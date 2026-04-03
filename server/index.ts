@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import pgSession from "connect-pg-simple";
-import pg from "pg";
+import createMemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -10,7 +9,7 @@ import type { User } from "@shared/schema";
 const app = express();
 const httpServer = createServer(app);
 
-// Trust proxy for Replit deployments (needed for secure cookies)
+// Trust proxy (needed for secure cookies behind reverse proxy)
 app.set('trust proxy', 1);
 
 declare module "express-session" {
@@ -26,41 +25,24 @@ declare module "http" {
   }
 }
 
-// PostgreSQL connection pool for sessions
-const sessionPool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
-});
-
-// Log session pool errors
-sessionPool.on('error', (err) => {
-  console.error('Session pool error:', err.message);
-});
-
-// PostgreSQL-backed session store (persists across restarts)
-const PgStore = pgSession(session);
+// Memory-backed session store (auto-prunes expired sessions)
+const MemoryStore = createMemoryStore(session);
 
 app.use(
   session({
-    store: new PgStore({
-      pool: sessionPool,
-      tableName: 'user_sessions',
-      createTableIfMissing: true,
-      errorLog: (err: Error) => console.error('Session store error:', err.message),
+    store: new MemoryStore({
+      checkPeriod: 86400000, // Prune expired entries every 24h
     }),
     secret: process.env.SESSION_SECRET || 'brusher-games-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
-    proxy: true,
   })
 );
 
