@@ -20,7 +20,7 @@ const pool = new Pool({
   max: 50,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 const db = drizzle(pool);
