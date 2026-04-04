@@ -33,7 +33,7 @@ app.use(
     store: new MemoryStore({
       checkPeriod: 86400000, // Prune expired entries every 24h
     }),
-    secret: process.env.SESSION_SECRET || 'brusher-games-secret-key-change-in-production',
+    secret: process.env.SESSION_SECRET || 'dev-only-secret-not-for-production',
     resave: false,
     saveUninitialized: false,
     proxy: true,

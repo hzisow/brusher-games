@@ -8,6 +8,15 @@ import bcrypt from "bcrypt";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 
+// Strip sensitive fields before sending user data to the client
+function sanitizeUser(user: any) {
+  const { password, ...safe } = user;
+  return safe;
+}
+function sanitizeUsers(users: any[]) {
+  return users.map(sanitizeUser);
+}
+
 // Rate limiting by IP
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
@@ -339,7 +348,7 @@ export async function registerRoutes(
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Session save failed" });
         }
-        return res.json(user);
+        return res.json(sanitizeUser(user));
       });
     } catch (error) {
       console.error('Signup error:', error);
@@ -386,7 +395,7 @@ export async function registerRoutes(
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Session save failed" });
         }
-        return res.json(user);
+        return res.json(sanitizeUser(user));
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -439,7 +448,7 @@ export async function registerRoutes(
       return res.status(404).json({ message: "User not found" });
     }
     
-    return res.json({ user, isAdmin: req.session.isAdmin || false });
+    return res.json({ user: sanitizeUser(user), isAdmin: req.session.isAdmin || false });
   });
 
   app.post("/api/auth/update-name", requireAuth, async (req, res) => {
@@ -454,7 +463,7 @@ export async function registerRoutes(
         name: name.trim(),
       });
 
-      return res.json(user);
+      return res.json(sanitizeUser(user));
     } catch (error) {
       console.error('Update name error:', error);
       return res.status(500).json({ message: "Failed to update name" });
@@ -465,7 +474,7 @@ export async function registerRoutes(
   app.get("/api/users", requireAuth, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      return res.json(users);
+      return res.json(sanitizeUsers(users));
     } catch (error) {
       return res.status(500).json({ message: "Failed to fetch users" });
     }
