@@ -17,6 +17,20 @@ function sanitizeUsers(users: any[]) {
   return users.map(sanitizeUser);
 }
 
+// Input sanitization: strip HTML tags and trim whitespace
+function sanitizeString(input: any, maxLength: number = 500): string {
+  if (typeof input !== 'string') return '';
+  return input.replace(/<[^>]*>/g, '').trim().slice(0, maxLength);
+}
+
+function isValidEmail(email: string): boolean {
+  return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
+function isValidUUID(id: string): boolean {
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 // Rate limiting by IP
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
@@ -307,14 +321,15 @@ export async function registerRoutes(
   // Signup endpoint - create new account with password
   app.post("/api/auth/signup", authRateLimit, async (req, res) => {
     try {
-      const { email, password } = req.body;
-      
-      if (!email || !email.endsWith('@gannacademy.org')) {
+      const email = sanitizeString(req.body.email, 254).toLowerCase();
+      const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+      if (!email || !isValidEmail(email) || !email.endsWith('@gannacademy.org')) {
         return res.status(400).json({ message: "Invalid email. Must be @gannacademy.org" });
       }
 
-      if (!password || password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      if (!password || password.length < 6 || password.length > 128) {
+        return res.status(400).json({ message: "Password must be 6-128 characters" });
       }
 
       // Check if user already exists
@@ -359,14 +374,15 @@ export async function registerRoutes(
   // Login endpoint - authenticate with password
   app.post("/api/auth/login", authRateLimit, async (req, res) => {
     try {
-      const { email, password } = req.body;
-      
-      if (!email || !email.endsWith('@gannacademy.org')) {
+      const email = sanitizeString(req.body.email, 254).toLowerCase();
+      const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+      if (!email || !isValidEmail(email) || !email.endsWith('@gannacademy.org')) {
         return res.status(400).json({ message: "Invalid email. Must be @gannacademy.org" });
       }
 
-      if (!password || password.length < 6) {
-        return res.status(400).json({ message: "Password is required (min. 6 characters)" });
+      if (!password || password.length < 6 || password.length > 128) {
+        return res.status(400).json({ message: "Password is required (6-128 characters)" });
       }
 
       const user = await storage.getUserByEmail(email);
@@ -405,7 +421,7 @@ export async function registerRoutes(
 
   app.post("/api/auth/admin", authRateLimit, async (req, res) => {
     try {
-      const { password } = req.body;
+      const password = typeof req.body.password === 'string' ? req.body.password.slice(0, 128) : '';
       
       if (password !== ADMIN_PASSWORD) {
         return res.status(401).json({ message: "Invalid password" });
@@ -453,14 +469,14 @@ export async function registerRoutes(
 
   app.post("/api/auth/update-name", requireAuth, async (req, res) => {
     try {
-      const { name } = req.body;
-      
-      if (!name || name.trim().length < 2) {
-        return res.status(400).json({ message: "Name is required" });
+      const name = sanitizeString(req.body.name, 100);
+
+      if (!name || name.length < 2) {
+        return res.status(400).json({ message: "Name must be 2-100 characters" });
       }
 
       const user = await storage.updateUser(req.session.userId!, {
-        name: name.trim(),
+        name,
       });
 
       return res.json(sanitizeUser(user));
@@ -599,14 +615,16 @@ export async function registerRoutes(
   app.post("/api/tags/dispute", requireAuth, actionRateLimit, async (req, res) => {
     try {
       const victimId = req.session.userId!;
-      const { message, evidenceData } = req.body;
+      const message = sanitizeString(req.body.message, 1000);
+      const evidenceData = typeof req.body.evidenceData === 'string' && req.body.evidenceData.length <= 5_000_000
+        ? req.body.evidenceData : null;
 
       const tagEvent = await storage.getPendingTagForVictim(victimId);
       if (tagEvent) {
         await storage.updateTagEvent(tagEvent.id, {
           status: 'disputed',
           disputeMessage: message || null,
-          evidenceData: evidenceData || null,
+          evidenceData,
         });
       }
 
@@ -625,7 +643,11 @@ export async function registerRoutes(
   app.post("/api/admin/revive/:userId", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      
+
+      if (!isValidUUID(userId)) {
+        return res.status(400).json({ message: "Invalid user ID" });
+      }
+
       await storage.updateUser(userId, {
         status: 'alive',
       });
@@ -687,15 +709,20 @@ export async function registerRoutes(
   // Feedback Routes
   app.post("/api/feedback", actionRateLimit, async (req, res) => {
     try {
-      const { email, message } = req.body;
-      
-      if (!message || message.trim().length === 0) {
+      const email = req.body.email ? sanitizeString(req.body.email, 254) : null;
+      const message = sanitizeString(req.body.message, 2000);
+
+      if (!message || message.length === 0) {
         return res.status(400).json({ message: "Message is required" });
       }
 
+      if (email && !isValidEmail(email)) {
+        return res.status(400).json({ message: "Invalid email format" });
+      }
+
       const feedback = await storage.createFeedback({
-        email: email || null,
-        message: message.trim(),
+        email,
+        message,
       });
 
       return res.json({ success: true, id: feedback.id });
@@ -740,8 +767,16 @@ export async function registerRoutes(
   app.post("/api/admin/resolve-dispute/:tagId", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { tagId } = req.params;
-      const { decision } = req.body;
-      
+      const decision = sanitizeString(req.body.decision, 20);
+
+      if (!isValidUUID(tagId)) {
+        return res.status(400).json({ message: "Invalid tag ID" });
+      }
+
+      if (decision !== 'revive' && decision !== 'confirm') {
+        return res.status(400).json({ message: "Decision must be 'revive' or 'confirm'" });
+      }
+
       const tagEvent = await storage.getTagEvent(tagId);
       if (!tagEvent) {
         return res.status(404).json({ message: "Dispute not found" });
@@ -883,8 +918,9 @@ export async function registerRoutes(
 
   app.post("/api/admin/announcements", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { title, message } = req.body;
-      
+      const title = sanitizeString(req.body.title, 200);
+      const message = sanitizeString(req.body.message, 2000);
+
       if (!title || !message) {
         return res.status(400).json({ message: "Title and message are required" });
       }
@@ -912,6 +948,9 @@ export async function registerRoutes(
 
   app.delete("/api/admin/announcements/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ message: "Invalid announcement ID" });
+      }
       await storage.deleteAnnouncement(req.params.id);
       broadcastGameState();
       return res.json({ success: true });
@@ -933,10 +972,15 @@ export async function registerRoutes(
   // Rule Violations
   app.post("/api/rule-violations", requireAuth, async (req, res) => {
     try {
-      const { accusedId, description } = req.body;
-      
-      if (!accusedId || !description) {
-        return res.status(400).json({ message: "Accused player and description are required" });
+      const accusedId = sanitizeString(req.body.accusedId, 50);
+      const description = sanitizeString(req.body.description, 2000);
+
+      if (!accusedId || !isValidUUID(accusedId)) {
+        return res.status(400).json({ message: "Invalid accused player ID" });
+      }
+
+      if (!description) {
+        return res.status(400).json({ message: "Description is required" });
       }
 
       const reporter = await storage.getUser(req.session.userId!);
@@ -980,8 +1024,12 @@ export async function registerRoutes(
 
   app.post("/api/admin/rule-violations/:id/resolve", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { resolution } = req.body;
-      
+      const resolution = sanitizeString(req.body.resolution, 2000);
+
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ message: "Invalid violation ID" });
+      }
+
       const admin = await storage.getUser(req.session.userId!);
       const violation = await storage.updateRuleViolation(req.params.id, {
         status: 'resolved',
@@ -1025,8 +1073,9 @@ export async function registerRoutes(
 
   app.post("/api/admin/special-rules", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { title, description } = req.body;
-      
+      const title = sanitizeString(req.body.title, 200);
+      const description = sanitizeString(req.body.description, 2000);
+
       if (!title || !description) {
         return res.status(400).json({ message: "Title and description are required" });
       }
@@ -1054,8 +1103,14 @@ export async function registerRoutes(
 
   app.patch("/api/admin/special-rules/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { title, description, isActive } = req.body;
-      
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ message: "Invalid rule ID" });
+      }
+
+      const title = req.body.title !== undefined ? sanitizeString(req.body.title, 200) : undefined;
+      const description = req.body.description !== undefined ? sanitizeString(req.body.description, 2000) : undefined;
+      const isActive = typeof req.body.isActive === 'boolean' ? req.body.isActive : undefined;
+
       const rule = await storage.updateSpecialRule(req.params.id, {
         ...(title !== undefined && { title }),
         ...(description !== undefined && { description }),
@@ -1079,6 +1134,9 @@ export async function registerRoutes(
 
   app.delete("/api/admin/special-rules/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (!isValidUUID(req.params.id)) {
+        return res.status(400).json({ message: "Invalid rule ID" });
+      }
       await storage.deleteSpecialRule(req.params.id);
 
       const admin = await storage.getUser(req.session.userId!);
@@ -1210,8 +1268,12 @@ export async function registerRoutes(
     try {
       const { userIds, action } = req.body;
 
-      if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-        return res.status(400).json({ message: "No users selected" });
+      if (!userIds || !Array.isArray(userIds) || userIds.length === 0 || userIds.length > 500) {
+        return res.status(400).json({ message: "Invalid user selection (1-500 users)" });
+      }
+
+      if (!userIds.every((id: any) => typeof id === 'string' && isValidUUID(id))) {
+        return res.status(400).json({ message: "Invalid user IDs" });
       }
 
       if (action === 'eliminate') {
@@ -1241,6 +1303,10 @@ export async function registerRoutes(
   app.get("/api/admin/export/:type", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { type } = req.params;
+
+      if (!['players', 'kills', 'activity'].includes(type)) {
+        return res.status(400).json({ message: "Invalid export type" });
+      }
 
       if (type === 'players') {
         const allUsers = await storage.getAllUsers();
