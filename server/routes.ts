@@ -616,7 +616,7 @@ export async function registerRoutes(
     try {
       const victimId = req.session.userId!;
       const message = sanitizeString(req.body.message, 1000);
-      const evidenceData = typeof req.body.evidenceData === 'string' && req.body.evidenceData.length <= 5_000_000
+      const evidenceData = typeof req.body.evidenceData === 'string' && req.body.evidenceData.length <= 15_000_000
         ? req.body.evidenceData : null;
 
       const tagEvent = await storage.getPendingTagForVictim(victimId);
