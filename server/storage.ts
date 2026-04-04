@@ -25,6 +25,14 @@ const pool = new Pool({
 
 const db = drizzle(pool);
 
+// Test database connection on startup
+pool.query('SELECT 1').then(() => {
+  console.log('Database connected successfully');
+}).catch((err) => {
+  console.error('Database connection failed:', err.message);
+  console.error('DATABASE_URL host:', process.env.DATABASE_URL?.replace(/\/\/.*:.*@/, '//***:***@'));
+});
+
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
