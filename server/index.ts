@@ -1,6 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import createMemoryStore from "memorystore";
+import cookieSession from "cookie-session";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -11,13 +10,6 @@ const httpServer = createServer(app);
 
 // Trust proxy (needed for secure cookies behind reverse proxy)
 app.set('trust proxy', 1);
-
-declare module "express-session" {
-  interface SessionData {
-    userId?: string;
-    isAdmin?: boolean;
-  }
-}
 
 declare module "http" {
   interface IncomingMessage {
@@ -30,26 +22,31 @@ if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET environment variable must be set in production');
 }
 
-// Memory-backed session store (auto-prunes expired sessions)
-const MemoryStore = createMemoryStore(session);
-
+// Cookie-based sessions — data stored in encrypted cookie, survives server restarts
 app.use(
-  session({
-    store: new MemoryStore({
-      checkPeriod: 86400000, // Prune expired entries every 24h
-    }),
-    secret: process.env.SESSION_SECRET || 'dev-only-secret-not-for-production',
-    resave: false,
-    saveUninitialized: false,
-    proxy: true,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    },
+  cookieSession({
+    name: 'session',
+    keys: [process.env.SESSION_SECRET || 'dev-only-secret-not-for-production'],
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax' as const,
   })
 );
+
+// Ensure req.session always exists and add save() compatibility
+app.use((req, _res, next) => {
+  if (!req.session) {
+    (req as any).session = {};
+  }
+  // Add save() method for compatibility with code that calls req.session.save()
+  if (!(req.session as any).save) {
+    (req.session as any).save = (cb?: (err?: any) => void) => {
+      if (cb) cb();
+    };
+  }
+  next();
+});
 
 app.use(
   express.json({

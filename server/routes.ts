@@ -310,17 +310,9 @@ export async function registerRoutes(
         });
       }
 
-      req.session.userId = user.id;
-      req.session.isAdmin = false;
-      
-      // Save session before redirect to ensure it persists
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.redirect("/login?error=session_failed");
-        }
-        res.redirect("/");
-      });
+      req.session!.userId = user.id;
+      req.session!.isAdmin = false;
+      res.redirect("/");
     } catch (error: any) {
       console.error("Microsoft callback error:", error?.errorCode || 'unknown');
       res.redirect("/login?error=callback_failed");
@@ -453,9 +445,8 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy(() => {
-      res.json({ success: true });
-    });
+    req.session = null;
+    res.json({ success: true });
   });
 
   // [Password reset routes removed]
@@ -1223,14 +1214,11 @@ export async function registerRoutes(
         const victim = allUsers.find(u => u.id === t.victimId);
         return {
           id: t.id,
-          hunterId: t.hunterId,
-          victimId: t.victimId,
           hunterName: hunter?.name || 'Unknown',
           victimName: victim?.name || 'Unknown',
           status: t.status,
-          disputeMessage: t.disputeMessage,
-          createdAt: t.createdAt,
-          resolvedAt: t.resolvedAt,
+          role: t.hunterId === userId ? 'hunter' as const : 'victim' as const,
+          timestamp: t.createdAt,
         };
       });
 
