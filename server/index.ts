@@ -25,6 +25,11 @@ declare module "http" {
   }
 }
 
+// Require SESSION_SECRET in production
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET environment variable must be set in production');
+}
+
 // Memory-backed session store (auto-prunes expired sessions)
 const MemoryStore = createMemoryStore(session);
 
@@ -99,10 +104,10 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = process.env.NODE_ENV === 'production' ? "Internal Server Error" : (err.message || "Internal Server Error");
 
+    console.error('Unhandled error:', err.message || err);
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after

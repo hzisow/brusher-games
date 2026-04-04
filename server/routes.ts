@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { timingSafeEqual } from "crypto";
 import { storage } from "./storage";
 import { insertUserSchema, insertTagEventSchema, insertFeedbackSchema } from "@shared/schema";
 import { WebSocketServer } from "ws";
@@ -29,6 +30,15 @@ function isValidEmail(email: string): boolean {
 
 function isValidUUID(id: string): boolean {
   return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+// Escape CSV fields to prevent injection and handle special chars
+function escapeCSV(field: any): string {
+  if (field === null || field === undefined) return '""';
+  let str = String(field);
+  // Prevent formula injection
+  if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+  return '"' + str.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '') + '"';
 }
 
 // Rate limiting by IP
@@ -63,6 +73,9 @@ const generalRateLimit = createRateLimiter(60, 60 * 1000);
 // Action routes (tag reporting, disputes): 10 per minute
 const actionRateLimit = createRateLimiter(10, 60 * 1000);
 
+// In-memory lock to prevent race conditions on tag confirm/dispute
+const tagActionLocks = new Set<string>();
+
 // Clean up old rate limit entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
@@ -90,7 +103,7 @@ function getMsalClient(): msal.ConfidentialClientApplication | null {
   const msalConfig: msal.Configuration = {
     auth: {
       clientId,
-      authority: "https://login.microsoftonline.com/bed2d6c7-d46f-4941-81d1-e2483b4b78bc",
+      authority: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID || 'common'}`,
       clientSecret,
     },
   };
@@ -246,7 +259,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/auth/microsoft/callback", async (req, res) => {
+  app.get("/api/auth/microsoft/callback", authRateLimit, async (req, res) => {
     try {
       const client = getMsalClient();
       if (!client) {
@@ -267,12 +280,9 @@ export async function registerRoutes(
         redirectUri,
       };
 
-      console.log("Microsoft callback - redirectUri used:", redirectUri);
-
       const response = await client.acquireTokenByCode(tokenRequest);
 
       if (!response || !response.account) {
-        console.error("Microsoft callback - no account in response:", JSON.stringify(response, null, 2));
         return res.redirect("/login?error=no_account");
       }
 
@@ -312,8 +322,7 @@ export async function registerRoutes(
         res.redirect("/");
       });
     } catch (error: any) {
-      console.error("Microsoft callback error:", error?.message || error);
-      console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error || {}), 2));
+      console.error("Microsoft callback error:", error?.errorCode || 'unknown');
       res.redirect("/login?error=callback_failed");
     }
   });
@@ -423,7 +432,8 @@ export async function registerRoutes(
     try {
       const password = typeof req.body.password === 'string' ? req.body.password.slice(0, 128) : '';
       
-      if (password !== ADMIN_PASSWORD) {
+      if (!ADMIN_PASSWORD || password.length !== ADMIN_PASSWORD.length ||
+          !timingSafeEqual(Buffer.from(password), Buffer.from(ADMIN_PASSWORD))) {
         return res.status(401).json({ message: "Invalid password" });
       }
 
@@ -571,10 +581,17 @@ export async function registerRoutes(
   });
 
   app.post("/api/tags/confirm", requireAuth, actionRateLimit, async (req, res) => {
+    const victimId = req.session.userId!;
+
+    // Prevent race condition: only one confirm/dispute at a time per user
+    if (tagActionLocks.has(victimId)) {
+      return res.status(409).json({ message: "Action already in progress" });
+    }
+    tagActionLocks.add(victimId);
+
     try {
-      const victimId = req.session.userId!;
       const victim = await storage.getUser(victimId);
-      
+
       if (!victim || victim.status !== 'pending_confirmation') {
         return res.status(400).json({ message: "No pending tag to confirm" });
       }
@@ -609,12 +626,26 @@ export async function registerRoutes(
     } catch (error) {
       console.error('Confirm tag error:', error);
       return res.status(500).json({ message: "Failed to confirm tag" });
+    } finally {
+      tagActionLocks.delete(victimId);
     }
   });
 
   app.post("/api/tags/dispute", requireAuth, actionRateLimit, async (req, res) => {
+    const victimId = req.session.userId!;
+
+    if (tagActionLocks.has(victimId)) {
+      return res.status(409).json({ message: "Action already in progress" });
+    }
+    tagActionLocks.add(victimId);
+
     try {
-      const victimId = req.session.userId!;
+      const victim = await storage.getUser(victimId);
+
+      if (!victim || victim.status !== 'pending_confirmation') {
+        return res.status(400).json({ message: "No pending tag to dispute" });
+      }
+
       const message = sanitizeString(req.body.message, 1000);
       const evidenceData = typeof req.body.evidenceData === 'string' && req.body.evidenceData.length <= 15_000_000
         ? req.body.evidenceData : null;
@@ -636,6 +667,8 @@ export async function registerRoutes(
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ message: "Failed to dispute tag" });
+    } finally {
+      tagActionLocks.delete(victimId);
     }
   });
 
@@ -1312,7 +1345,7 @@ export async function registerRoutes(
         const allUsers = await storage.getAllUsers();
         const csv = ['Name,Email,Status,Kills,Target ID,Created At']
           .concat(allUsers.map(u =>
-            `"${u.name}","${u.email}","${u.status}",${u.kills},"${u.targetId || ''}","${u.createdAt}"`
+            `${escapeCSV(u.name)},${escapeCSV(u.email)},${escapeCSV(u.status)},${u.kills},${escapeCSV(u.targetId || '')},${escapeCSV(u.createdAt)}`
           )).join('\n');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=players.csv');
@@ -1324,7 +1357,7 @@ export async function registerRoutes(
           .concat(tags.map(t => {
             const hunter = allUsers.find(u => u.id === t.hunterId);
             const victim = allUsers.find(u => u.id === t.victimId);
-            return `"${hunter?.name || 'Unknown'}","${victim?.name || 'Unknown'}","${t.resolvedAt || t.createdAt}"`;
+            return `${escapeCSV(hunter?.name || 'Unknown')},${escapeCSV(victim?.name || 'Unknown')},${escapeCSV(t.resolvedAt || t.createdAt)}`;
           })).join('\n');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=kills.csv');
@@ -1333,7 +1366,7 @@ export async function registerRoutes(
         const logs = await storage.getActivityLogs(1000);
         const csv = ['Action,Actor,Target,Details,Date']
           .concat(logs.map(l =>
-            `"${l.action}","${l.actorName || ''}","${l.targetName || ''}","${(l.details || '').replace(/"/g, '""')}","${l.createdAt}"`
+            `${escapeCSV(l.action)},${escapeCSV(l.actorName || '')},${escapeCSV(l.targetName || '')},${escapeCSV(l.details || '')},${escapeCSV(l.createdAt)}`
           )).join('\n');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=activity.csv');
