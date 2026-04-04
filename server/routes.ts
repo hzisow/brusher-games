@@ -314,7 +314,7 @@ export async function registerRoutes(
       req.session!.isAdmin = false;
       res.redirect("/");
     } catch (error: any) {
-      console.error("Microsoft callback error:", error?.errorCode || 'unknown');
+      console.error("Microsoft callback error:", error?.errorCode || 'unknown', error?.errorMessage || error?.message || '');
       res.redirect("/login?error=callback_failed");
     }
   });
