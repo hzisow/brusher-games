@@ -8,38 +8,48 @@ import bcrypt from "bcrypt";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 
-// Rate limiting: track recent actions per user
+// Rate limiting by IP
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW = 60000; // 1 minute
-const MAX_ACTIONS_PER_WINDOW = 10;
 
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
-  
-  if (!userLimit || now > userLimit.resetTime) {
-    rateLimitMap.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-  
-  if (userLimit.count >= MAX_ACTIONS_PER_WINDOW) {
-    return false;
-  }
-  
-  userLimit.count++;
-  return true;
+function createRateLimiter(maxAttempts: number, windowMs: number) {
+  return (req: Request, res: Response, next: Function) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${ip}:${req.path}`;
+    const now = Date.now();
+    const entry = rateLimitMap.get(key);
+
+    if (!entry || now > entry.resetTime) {
+      rateLimitMap.set(key, { count: 1, resetTime: now + windowMs });
+      return next();
+    }
+
+    if (entry.count >= maxAttempts) {
+      const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
+      return res.status(429).json({ message: `Too many requests. Try again in ${retryAfter} seconds.` });
+    }
+
+    entry.count++;
+    return next();
+  };
 }
 
-// Clean up old rate limit entries periodically
+// Auth routes: 5 attempts per 15 minutes
+const authRateLimit = createRateLimiter(5, 15 * 60 * 1000);
+// General API routes: 60 requests per minute
+const generalRateLimit = createRateLimiter(60, 60 * 1000);
+// Action routes (tag reporting, disputes): 10 per minute
+const actionRateLimit = createRateLimiter(10, 60 * 1000);
+
+// Clean up old rate limit entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
   const entries = Array.from(rateLimitMap.entries());
-  for (const [userId, data] of entries) {
+  for (const [key, data] of entries) {
     if (now > data.resetTime) {
-      rateLimitMap.delete(userId);
+      rateLimitMap.delete(key);
     }
   }
-}, 60000);
+}, 300000);
 
 // Microsoft OAuth Configuration - lazy initialization
 let msalClient: msal.ConfidentialClientApplication | null = null;
@@ -187,7 +197,11 @@ export async function registerRoutes(
   });
 
   // Microsoft OAuth Routes
-  app.get("/api/auth/microsoft", async (req, res) => {
+  // Apply general rate limit to all API routes
+  app.use("/api", generalRateLimit);
+
+  // Microsoft OAuth Routes
+  app.get("/api/auth/microsoft", authRateLimit, async (req, res) => {
     try {
       const client = getMsalClient();
       if (!client) {
@@ -282,7 +296,7 @@ export async function registerRoutes(
   });
 
   // Signup endpoint - create new account with password
-  app.post("/api/auth/signup", async (req, res) => {
+  app.post("/api/auth/signup", authRateLimit, async (req, res) => {
     try {
       const { email, password } = req.body;
       
@@ -334,7 +348,7 @@ export async function registerRoutes(
   });
 
   // Login endpoint - authenticate with password
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authRateLimit, async (req, res) => {
     try {
       const { email, password } = req.body;
       
@@ -380,7 +394,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/admin", async (req, res) => {
+  app.post("/api/auth/admin", authRateLimit, async (req, res) => {
     try {
       const { password } = req.body;
       
@@ -481,15 +495,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/tags/report", requireAuth, async (req, res) => {
+  app.post("/api/tags/report", requireAuth, actionRateLimit, async (req, res) => {
     try {
       const hunterId = req.session.userId!;
-      
-      // Rate limiting
-      if (!checkRateLimit(hunterId)) {
-        return res.status(429).json({ message: "Too many requests. Please wait a moment." });
-      }
-      
+
       const hunter = await storage.getUser(hunterId);
       
       if (!hunter || !hunter.targetId) {
@@ -536,7 +545,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/tags/confirm", requireAuth, async (req, res) => {
+  app.post("/api/tags/confirm", requireAuth, actionRateLimit, async (req, res) => {
     try {
       const victimId = req.session.userId!;
       const victim = await storage.getUser(victimId);
@@ -578,7 +587,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/tags/dispute", requireAuth, async (req, res) => {
+  app.post("/api/tags/dispute", requireAuth, actionRateLimit, async (req, res) => {
     try {
       const victimId = req.session.userId!;
       const { message, evidenceData } = req.body;
@@ -667,7 +676,7 @@ export async function registerRoutes(
   });
 
   // Feedback Routes
-  app.post("/api/feedback", async (req, res) => {
+  app.post("/api/feedback", actionRateLimit, async (req, res) => {
     try {
       const { email, message } = req.body;
       

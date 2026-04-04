@@ -260,7 +260,61 @@ export default function Dashboard() {
 
       {/* Status Hero */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card className="border-border bg-card shadow-sm overflow-hidden relative">
+        {/* Target Card - shows first on mobile */}
+        <Card className={`border-red-300 bg-red-50 shadow-sm relative overflow-hidden flex flex-col order-first md:order-last ${!isAlive && 'opacity-50 grayscale'}`}>
+           {isAlive && target ? (
+             <>
+               <CardHeader className="pb-2">
+                 <div className="flex justify-between items-start">
+                   <CardTitle className="text-sm font-medium text-red-700 uppercase tracking-widest flex items-center gap-2">
+                     <Crosshair className="h-4 w-4" /> Your Target
+                   </CardTitle>
+                   <Badge variant="secondary" className="bg-red-200 text-red-800 hover:bg-red-300">
+                     ACTIVE
+                   </Badge>
+                 </div>
+               </CardHeader>
+               <CardContent className="flex-1 flex flex-col items-center justify-center text-center py-6">
+                 <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-4 border-4 border-red-200 shadow-inner">
+                   <span className="text-3xl font-display font-bold text-red-700">
+                     {target.name.charAt(0)}
+                   </span>
+                 </div>
+                 <h2 className="text-3xl font-bold font-display tracking-tight text-red-900 mb-1">
+                   {target.name}
+                 </h2>
+                 <p className="text-red-600 font-mono text-sm bg-red-100 px-2 py-1 rounded">
+                   ID: {target.id.split('-')[0].toUpperCase()}
+                 </p>
+               </CardContent>
+             </>
+           ) : (
+             <CardContent className="flex-1 flex flex-col items-center justify-center text-center py-10">
+               {isEliminated ? (
+                 <>
+                   <Skull className="h-16 w-16 text-red-300 mb-4" />
+                   <h2 className="text-2xl font-bold text-red-800">Out of the Game</h2>
+                   <p className="text-sm text-red-600 mt-2">Better luck next year.</p>
+                 </>
+               ) : (isPending || isDisputed) ? (
+                 <>
+                   <Clock className="h-16 w-16 text-yellow-500/50 mb-4 animate-pulse" />
+                   <h2 className="text-2xl font-bold text-yellow-600">Status Pending</h2>
+                   <p className="text-sm text-muted-foreground mt-2">Resolve your status to continue.</p>
+                 </>
+               ) : (
+                 <>
+                   <CheckCircle2 className="h-16 w-16 text-red-300 mb-4" />
+                   <h2 className="text-2xl font-bold text-red-700">No Target Assigned</h2>
+                   <p className="text-sm text-red-500 mt-2">Wait for assignment.</p>
+                 </>
+               )}
+             </CardContent>
+           )}
+        </Card>
+
+        {/* Player Status Card - shows second on mobile */}
+        <Card className="border-border bg-card shadow-sm overflow-hidden relative order-last md:order-first">
           <div className="absolute top-0 right-0 p-4 opacity-5">
             <Target className="h-32 w-32" />
           </div>
@@ -285,59 +339,6 @@ export default function Dashboard() {
               </div>
             </div>
           </CardContent>
-        </Card>
-
-        {/* Target Card */}
-        <Card className={`border-border bg-card shadow-sm relative overflow-hidden flex flex-col ${!isAlive && 'opacity-50 grayscale'}`}>
-           {isAlive && target ? (
-             <>
-               <CardHeader className="pb-2">
-                 <div className="flex justify-between items-start">
-                   <CardTitle className="text-sm font-medium text-primary uppercase tracking-widest flex items-center gap-2">
-                     <Crosshair className="h-4 w-4" /> Your Target
-                   </CardTitle>
-                   <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">
-                     ACTIVE
-                   </Badge>
-                 </div>
-               </CardHeader>
-               <CardContent className="flex-1 flex flex-col items-center justify-center text-center py-6">
-                 <div className="w-24 h-24 bg-secondary rounded-full flex items-center justify-center mb-4 border-4 border-background shadow-inner">
-                   <span className="text-3xl font-display font-bold text-muted-foreground">
-                     {target.name.charAt(0)}
-                   </span>
-                 </div>
-                 <h2 className="text-3xl font-bold font-display tracking-tight text-foreground mb-1">
-                   {target.name}
-                 </h2>
-                 <p className="text-muted-foreground font-mono text-sm bg-muted/50 px-2 py-1 rounded">
-                   ID: {target.id.split('-')[0].toUpperCase()}
-                 </p>
-               </CardContent>
-             </>
-           ) : (
-             <CardContent className="flex-1 flex flex-col items-center justify-center text-center py-10">
-               {isEliminated ? (
-                 <>
-                   <Skull className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                   <h2 className="text-2xl font-bold text-muted-foreground">Out of the Game</h2>
-                   <p className="text-sm text-muted-foreground mt-2">Better luck next year.</p>
-                 </>
-               ) : (isPending || isDisputed) ? (
-                 <>
-                   <Clock className="h-16 w-16 text-yellow-500/50 mb-4 animate-pulse" />
-                   <h2 className="text-2xl font-bold text-yellow-600">Status Pending</h2>
-                   <p className="text-sm text-muted-foreground mt-2">Resolve your status to continue.</p>
-                 </>
-               ) : (
-                 <>
-                   <CheckCircle2 className="h-16 w-16 text-green-500/50 mb-4" />
-                   <h2 className="text-2xl font-bold text-green-600">No Target Assigned</h2>
-                   <p className="text-sm text-muted-foreground mt-2">Wait for assignment.</p>
-                 </>
-               )}
-             </CardContent>
-           )}
         </Card>
       </div>
 
