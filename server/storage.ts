@@ -15,15 +15,12 @@ import {
 const { Pool } = pg;
 
 // Increased pool size for 400+ concurrent users
-const dbUrl = process.env.DATABASE_URL || '';
-const connectionString = dbUrl.includes('?') ? dbUrl : `${dbUrl}?sslmode=require`;
-
 const pool = new Pool({
-  connectionString,
+  connectionString: process.env.DATABASE_URL,
   max: 50,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 const db = drizzle(pool);
